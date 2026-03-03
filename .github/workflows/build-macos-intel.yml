@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     name: Build Blender (${{ github.event.inputs.blender_tag }}) - macOS Intel
-    runs-on: macos-13
+    runs-on: macos-26-intel
     timeout-minutes: 240
 
     steps:

@@ -1,6 +1,8 @@
 name: Build Blender macOS Intel x86_64
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       blender_tag:
@@ -30,7 +32,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install cmake git-lfs autoconf automake libtool meson nasm yasm
+          brew install cmake git-lfs autoconf automake bison dos2unix flex libtool meson ninja pkg-config nasm yasm
 
       - name: Cache compiled dependencies
         id: cache-deps

@@ -46,12 +46,16 @@ jobs:
       - name: Build dependencies from source
         if: steps.cache-deps.outputs.cache-hit != 'true' || github.event.inputs.build_deps == 'true'
         run: |
-          for attempt in 1 2 3; do
-            echo "=== Attempt $attempt ==="
-            make deps NPROCS=$(sysctl -n hw.ncpu) && break
-            echo "Attempt $attempt failed, retrying in 30s..."
-            sleep 30
-          done
+          BLENDER_DIR=$(pwd)
+          DEPS_BUILD_DIR=$(dirname "$BLENDER_DIR")/build_darwin/deps_x64
+          DEPS_INSTALL_DIR="$BLENDER_DIR/lib/macos_x64"
+
+          cmake -H"$BLENDER_DIR/build_files/build_environment" \
+                -B"$DEPS_BUILD_DIR" \
+                -DHARVEST_TARGET="$DEPS_INSTALL_DIR" \
+                -DPACKAGE_USE_UPSTREAM_SOURCES=OFF
+
+          make -s -C "$DEPS_BUILD_DIR" -j$(sysctl -n hw.ncpu) install
 
       - name: Upload dependencies artifact
         uses: actions/upload-artifact@v4

@@ -46,7 +46,12 @@ jobs:
       - name: Build dependencies from source
         if: steps.cache-deps.outputs.cache-hit != 'true' || github.event.inputs.build_deps == 'true'
         run: |
-          make deps NPROCS=$(sysctl -n hw.ncpu)
+          for attempt in 1 2 3; do
+            echo "=== Attempt $attempt ==="
+            make deps NPROCS=$(sysctl -n hw.ncpu) && break
+            echo "Attempt $attempt failed, retrying in 30s..."
+            sleep 30
+          done
 
       - name: Upload dependencies artifact
         uses: actions/upload-artifact@v4

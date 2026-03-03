@@ -1,0 +1,73 @@
+name: Build Blender macOS Intel x86_64
+
+on:
+  workflow_dispatch:
+    inputs:
+      blender_tag:
+        description: 'Blender version tag to build (e.g. v5.0.1)'
+        required: true
+        default: 'v5.0.1'
+
+jobs:
+  build:
+    name: Build Blender (${{ github.event.inputs.blender_tag }}) - macOS Intel
+    runs-on: macos-13
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.blender_tag }}
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Install dependencies
+        run: |
+          brew install cmake git-lfs
+
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+
+      - name: Download precompiled libraries (make update)
+        run: |
+          python3 ./build_files/utils/make_update.py --no-blender
+
+      - name: Build Blender
+        run: |
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: List build output
+        run: |
+          ls -la ../build_darwin/bin/
+
+      - name: Create DMG
+        run: |
+          APP_PATH="../build_darwin/bin/Blender.app"
+          if [ -d "$APP_PATH" ]; then
+            hdiutil create -volname "Blender" \
+              -srcfolder "$APP_PATH" \
+              -ov -format UDZO \
+              "Blender-${{ github.event.inputs.blender_tag }}-macOS-intel.dmg"
+          else
+            echo "Blender.app not found, skipping DMG creation"
+            ls -laR ../build_darwin/bin/ || true
+          fi
+
+      - name: Upload Blender.app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blender-${{ github.event.inputs.blender_tag }}-macOS-intel
+          path: |
+            ../build_darwin/bin/Blender.app
+          if-no-files-found: warn
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Blender-${{ github.event.inputs.blender_tag }}-macOS-intel-dmg
+          path: "*.dmg"
+          if-no-files-found: ignore

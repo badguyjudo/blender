@@ -43,15 +43,27 @@ jobs:
           restore-keys: |
             blender-deps-macos-intel-
 
+      - name: Pre-download problematic source packages
+        if: steps.cache-deps.outputs.cache-hit != 'true' || github.event.inputs.build_deps == 'true'
+        run: |
+          PACKAGES_DIR="../build_darwin/deps_x64/packages"
+          mkdir -p "$PACKAGES_DIR"
+
+          # gmplib.org blocks CI IPs, use GNU mirror instead
+          curl -L --retry 5 --retry-delay 10 -o "$PACKAGES_DIR/gmp-6.3.0.tar.xz" \
+            "https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
+
+          ACTUAL_MD5=$(md5 -q "$PACKAGES_DIR/gmp-6.3.0.tar.xz")
+          if [ "$ACTUAL_MD5" != "956dc04e864001a9c22429f761f2c283" ]; then
+            echo "MD5 mismatch: expected 956dc04e864001a9c22429f761f2c283, got $ACTUAL_MD5"
+            exit 1
+          fi
+          echo "GMP download verified OK"
+
       - name: Build dependencies from source
         if: steps.cache-deps.outputs.cache-hit != 'true' || github.event.inputs.build_deps == 'true'
         run: |
-          for attempt in 1 2 3; do
-            echo "=== Attempt $attempt ==="
-            make deps NPROCS=$(sysctl -n hw.ncpu) && break
-            echo "Attempt $attempt failed, retrying in 60s..."
-            sleep 60
-          done
+          make deps NPROCS=$(sysctl -n hw.ncpu)
 
       - name: Upload dependencies artifact
         uses: actions/upload-artifact@v4

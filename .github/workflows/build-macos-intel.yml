@@ -7,12 +7,17 @@ on:
         description: 'Blender version tag to build (e.g. v5.0.1)'
         required: true
         default: 'v5.0.1'
+      build_deps:
+        description: 'Force rebuild of dependencies'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
-  build:
-    name: Build Blender (${{ github.event.inputs.blender_tag }}) - macOS Intel
+  deps:
+    name: Build Dependencies - macOS Intel
     runs-on: macos-26-intel
-    timeout-minutes: 240
+    timeout-minutes: 360
 
     steps:
       - name: Checkout repository
@@ -23,17 +28,64 @@ jobs:
           lfs: false
           submodules: false
 
-      - name: Install dependencies
+      - name: Install build tools
+        run: |
+          brew install cmake git-lfs autoconf automake libtool meson nasm yasm
+
+      - name: Cache compiled dependencies
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: lib/macos_x64
+          key: blender-deps-macos-intel-${{ github.event.inputs.blender_tag }}-v1
+          restore-keys: |
+            blender-deps-macos-intel-
+
+      - name: Build dependencies from source
+        if: steps.cache-deps.outputs.cache-hit != 'true' || github.event.inputs.build_deps == 'true'
+        run: |
+          make deps NPROCS=$(sysctl -n hw.ncpu)
+
+      - name: Upload dependencies artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-deps-macos-intel
+          path: lib/macos_x64
+          retention-days: 90
+
+  build:
+    name: Build Blender (${{ github.event.inputs.blender_tag }}) - macOS Intel
+    runs-on: macos-26-intel
+    needs: deps
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.blender_tag }}
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Install build tools
         run: |
           brew install cmake git-lfs
 
-      - name: Setup Git LFS
-        run: |
-          git lfs install
+      - name: Restore cached dependencies
+        uses: actions/cache@v4
+        with:
+          path: lib/macos_x64
+          key: blender-deps-macos-intel-${{ github.event.inputs.blender_tag }}-v1
+          restore-keys: |
+            blender-deps-macos-intel-
 
-      - name: Download precompiled libraries (make update)
-        run: |
-          python3 ./build_files/utils/make_update.py --no-blender
+      - name: Download dependencies artifact (fallback)
+        if: hashFiles('lib/macos_x64') == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: blender-deps-macos-intel
+          path: lib/macos_x64
 
       - name: Build Blender
         run: |
